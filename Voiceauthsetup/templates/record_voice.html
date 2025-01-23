@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Voice</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f8ff;
+            font-family: Arial, sans-serif;
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            margin-bottom: 20px;
+            width: 200px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            background-color: #007bff;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        #recordBtn.active {
+            background-color: #28a745; /* Change to green when pressed */
+        }
+
+        #timer {
+            font-size: 24px;
+            margin-top: 20px;
+            color: #333;
+        }
+
+        #retryBtn, #saveBtn {
+            display: none; /* Hide buttons initially */
+        }
+    </style>
+</head>
+<body>
+    <h1>Record Your Voice</h1>
+    <input type="text" id="nameInput" placeholder="Enter your name" />
+    <button id="recordBtn">Start Recording</button>
+    <button id="retryBtn">Retry</button>
+    <button id="saveBtn">Save</button>
+    <div id="timer">5</div>
+    
+    <audio id="audioPlayback" controls></audio>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let countdownInterval;
+        let audioBlob; // To store the recorded audio blob
+
+        document.getElementById('recordBtn').addEventListener('click', async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audioPlayback = document.getElementById('audioPlayback');
+                audioPlayback.src = audioUrl;
+
+                // Get the name input
+                const name = document.getElementById('nameInput').value || 'recording'; // Default to 'recording' if no name is provided
+                const filename = `${name}.wav`;
+
+                // Upload the audio file to the server
+                const formData = new FormData();
+                formData.append('file', new File([audioBlob], filename, { type: 'audio/wav' }));
+
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    console.log(result.message);
+                } catch (error) {
+                    console.error('Error uploading the file:', error);
+                }
+                
+                // Show retry and save buttons and reset the recording button
+                document.getElementById('retryBtn').style.display = 'block';
+                document.getElementById('saveBtn').style.display = 'block';
+                document.getElementById('recordBtn').disabled = true;
+            };
+
+            // Start countdown timer
+            let timeLeft = 5;
+            document.getElementById('timer').textContent = timeLeft;
+            document.getElementById('recordBtn').classList.add('active');
+
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    mediaRecorder.stop();
+                    document.getElementById('recordBtn').disabled = true;
+                }
+            }, 1000);
+
+            mediaRecorder.start();
+        });
+
+        document.getElementById('retryBtn').addEventListener('click', () => {
+            // Reset everything for a new recording
+            audioChunks = [];
+            document.getElementById('timer').textContent = '5';
+            document.getElementById('recordBtn').disabled = false;
+            document.getElementById('recordBtn').classList.remove('active');
+            document.getElementById('retryBtn').style.display = 'none';
+            document.getElementById('saveBtn').style.display = 'none'; // Hide save button
+            document.getElementById('audioPlayback').src = ''; // Clear previous audio playback
+        });
+
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            const name = document.getElementById('nameInput').value || 'recording';
+            const filename = `${name}.wav`;
+
+            // Create a link element to trigger the download
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(audioBlob); // Create a URL for the audio blob
+            link.download = filename; // Set the filename
+            document.body.appendChild(link); // Append to the body
+            link.click(); // Trigger the download
+            document.body.removeChild(link); // Remove the link after downloading
+        });
+    </script>
+</body>
+</html>
