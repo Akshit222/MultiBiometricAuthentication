@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Voice</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            display: inline-block;
+        }
+        h2 {
+            color: #333;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #recordButton {
+            background-color: #28a745;
+            color: #fff;
+        }
+        #stopButton {
+            background-color: #dc3545;
+            color: #fff;
+        }
+        #saveButton {
+            background-color: #007bff;
+            color: #fff;
+        }
+        #timer {
+            font-size: 18px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Record Your Voice</h2>
+        <button id="recordButton">Start Recording</button>
+        <button id="stopButton" disabled>Stop Recording</button>
+        <button id="saveButton" disabled>Save Recording</button>
+        <p id="timer">Timer: 0s</p>
+        <audio id="audioPlayback" controls></audio>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let timerInterval;
+        let timeElapsed = 0;
+        
+        const recordButton = document.getElementById('recordButton');
+        const stopButton = document.getElementById('stopButton');
+        const saveButton = document.getElementById('saveButton');
+        const timerDisplay = document.getElementById('timer');
+        const audioPlayback = document.getElementById('audioPlayback');
+        
+        recordButton.addEventListener('click', startRecording);
+        stopButton.addEventListener('click', stopRecording);
+        saveButton.addEventListener('click', saveRecording);
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPlayback.src = audioUrl;
+                    audioChunks = [];
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                recordButton.disabled = true;
+                stopButton.disabled = false;
+                saveButton.disabled = true;
+
+                startTimer();
+            } catch (err) {
+                console.error('Failed to start recording:', err);
+            }
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            stopButton.disabled = true;
+            recordButton.disabled = false;
+            saveButton.disabled = false;
+            stopTimer();
+        }
+
+        function startTimer() {
+            timeElapsed = 0;
+            timerInterval = setInterval(() => {
+                timeElapsed++;
+                timerDisplay.textContent = `Timer: ${timeElapsed}s`;
+                if (timeElapsed >= 5) {
+                    stopRecording();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            timerDisplay.textContent = 'Timer: 0s';
+        }
+
+        function saveRecording() {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const url = window.URL.createObjectURL(audioBlob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'recording.wav';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
